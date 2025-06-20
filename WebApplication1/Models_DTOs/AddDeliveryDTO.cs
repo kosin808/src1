@@ -3,13 +3,13 @@ namespace WebApplication1.Models_DTOs;
 public class AddDeliveryDTO
 {
     public int DeliveryId { get; set; }
-    public int CustomerID { get; set; }
-    public string LicenseNumber { get; set; }
-    public List<ProductServiceInput> Services { get; set; } = new List<ProductServiceInput>();
+    public int CustomerId { get; set; }
+    public string LicenceNumber { get; set; }
+    public List<ProductInput> Products { get; set; }
 }
 
-public class ProductServiceInput
+public class ProductInput
 {
-    public string ServiceName { get; set; }
-    public int amount { get; set; }
+    public string Name { get; set; }
+    public int Amount { get; set; }
 }

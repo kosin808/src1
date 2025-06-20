@@ -33,12 +33,11 @@ public class DeliveriesController : ControllerBase
         }
     }
     
-    
-    // api/appointments
+    // api/deliveries
     [HttpPost]
     public async Task<IActionResult> AddDelivery([FromBody] AddDeliveryDTO delivery)
     {
-        if (!delivery.Services.Any())
+        if (!delivery.Products.Any())
             return BadRequest("Bad input");
         
         try
@@ -60,4 +59,5 @@ public class DeliveriesController : ControllerBase
         
         return CreatedAtAction(nameof(GetDelivery), new { id = delivery.DeliveryId }, delivery);
     }
+    
 }

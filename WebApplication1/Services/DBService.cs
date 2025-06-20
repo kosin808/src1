@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.Data.SqlClient;
 using WebApplication1.Models_DTOs;
 
@@ -72,8 +73,76 @@ public class DBService : IDBService
         return deliveryInfo;
     }
 
-    public Task AddDelivery(AddDeliveryDTO delivery)
+   public async Task AddDelivery(AddDeliveryDTO delivery)
+{
+    await using SqlConnection connection = new SqlConnection(_connectionString);
+    await connection.OpenAsync();
+
+    await using var transaction = await connection.BeginTransactionAsync();
+    try
     {
-        throw new NotImplementedException();
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction as SqlTransaction;
+
+        // 1. Znajdź driver_id po licenceNumber
+        command.CommandText = "SELECT driver_id FROM Driver WHERE licence_number = @LicenceNumber;";
+        command.Parameters.AddWithValue("@LicenceNumber", delivery.LicenceNumber);
+        var driverIdObj = await command.ExecuteScalarAsync();
+        if (driverIdObj == null)
+            throw new ArgumentException($"Driver with licence number {delivery.LicenceNumber} not found.");
+        int driverId = (int)driverIdObj;
+
+        // 2. Sprawdź czy customer istnieje
+        command.Parameters.Clear();
+        command.CommandText = "SELECT 1 FROM Customer WHERE customer_id = @CustomerId;";
+        command.Parameters.AddWithValue("@CustomerId", delivery.CustomerId);
+        var customerExists = await command.ExecuteScalarAsync();
+        if (customerExists == null)
+            throw new ArgumentException($"Customer with ID {delivery.CustomerId} not found.");
+
+        // 3. Wstaw nową dostawę do tabeli Delivery
+        command.Parameters.Clear();
+        command.CommandText = @"
+            INSERT INTO Delivery (delivery_id, customer_id, driver_id, date)
+            VALUES (@DeliveryId, @CustomerId, @DriverId, @Date);";
+        command.Parameters.AddWithValue("@DeliveryId", delivery.DeliveryId);
+        command.Parameters.AddWithValue("@CustomerId", delivery.CustomerId);
+        command.Parameters.AddWithValue("@DriverId", driverId);
+        command.Parameters.AddWithValue("@Date", DateTime.Now);  // lub z JSON, jeśli dodasz pole
+
+        await command.ExecuteNonQueryAsync();
+
+        // 4. Dodaj produkty do Product_Delivery
+        foreach (var product in delivery.Products)
+        {
+            command.Parameters.Clear();
+
+            // Znajdź product_id po nazwie
+            command.CommandText = "SELECT product_id FROM Product WHERE name = @ProductName;";
+            command.Parameters.AddWithValue("@ProductName", product.Name);
+            var productIdObj = await command.ExecuteScalarAsync();
+            if (productIdObj == null)
+                throw new ArgumentException($"Product '{product.Name}' was not found.");
+            int productId = (int)productIdObj;
+
+            // Wstaw do Product_Delivery
+            command.Parameters.Clear();
+            command.CommandText = @"
+                INSERT INTO Product_Delivery (product_id, delivery_id, amount)
+                VALUES (@ProductId, @DeliveryId, @Amount);";
+            command.Parameters.AddWithValue("@ProductId", productId);
+            command.Parameters.AddWithValue("@DeliveryId", delivery.DeliveryId);
+            command.Parameters.AddWithValue("@Amount", product.Amount);
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
     }
+    catch
+    {
+        await transaction.RollbackAsync();
+        throw;
+    }
+}
 }
